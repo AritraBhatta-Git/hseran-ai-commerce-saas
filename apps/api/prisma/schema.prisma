@@ -1,0 +1,453 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * HSERAN Multi-Tenant SaaS E-commerce Platform
+ * Multi-store per seller
+ * Store-level isolation
+ * Product-category many-to-many
+ * Order system with atomic safety
+ */
+
+enum UserRole {
+  SELLER
+  ADMIN
+  CUSTOMER
+}
+
+enum StoreStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  HIDDEN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OtpPurpose {
+  SELLER_LOGIN
+  SELLER_SIGNUP
+  CUSTOMER_VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+model Seller {
+  id            String  @id @default(cuid())
+  phone         String  @unique
+  name          String?
+  email         String? @unique
+  emailVerified Boolean @default(false)
+  googleId      String? @unique
+
+  isOnboarded    Boolean @default(false)
+  onboardingStep Int     @default(0)
+
+  businessCategory  String?
+  businessType      String?
+  deliveryLocation  String?
+  preferredLanguage String?
+  instagramLink     String?
+  whatsappNumber    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stores      Store[]
+  sessions    AuthSession[]
+  otpRequests OtpRequest[]
+}
+
+model Customer {
+  id            String  @id @default(cuid())
+  name          String
+  email         String  @unique
+  passwordHash  String?
+  emailVerified Boolean @default(false)
+  googleId      String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions            AuthSession[]
+  orders              Order[]
+  carts               Cart[]
+  addresses           Address[]
+  emailVerifications  EmailVerification[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model AdminUser {
+  id           String @id @default(cuid())
+  email        String @unique
+  passwordHash String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions AuthSession[]
+}
+
+model Store {
+  id       String @id @default(cuid())
+  sellerId String
+  seller   Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  name   String
+  slug   String      @unique
+  status StoreStatus @default(TRIAL)
+
+  description String?
+  logoUrl     String?
+  bannerUrl   String?
+  language    String?
+
+  isPublic Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products   Product[]
+  categories Category[]
+  orders     Order[]
+  carts      Cart[]
+
+  contactEmail String?
+  contactPhone String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+
+  refundPolicy   String?
+  shippingPolicy String?
+  privacyPolicy  String?
+  termsPolicy    String?
+
+  seoTitle       String?
+  seoDescription String?
+  seoKeywords    String?
+
+  deliveryTimeline String?
+
+  theme String? @default("default")
+
+  onboardingCompleted Boolean @default(false)
+
+  @@index([sellerId])
+}
+
+model Category {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  name String
+  slug String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products ProductCategory[]
+
+  @@unique([storeId, slug])
+  @@index([storeId])
+}
+
+model Product {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  uid         String  @unique
+  name        String
+  description String?
+  price       Int
+  mrp         Int?
+  stockQty    Int     @default(0)
+
+  sku      String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images     ProductImage[]
+  categories ProductCategory[]
+  variants   ProductVariant[]
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+  stockLogs  StockLog[]
+
+  @@index([storeId])
+  @@index([isActive])
+}
+
+model ProductCategory {
+  id String @id @default(cuid())
+
+  productId  String
+  categoryId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url       String
+  sortOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  totalAmount Int
+
+  status OrderStatus @default(PENDING)
+
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentProvider String?
+  paymentId       String?
+
+  shippingFullName     String?
+  shippingPhone        String?
+  shippingAddressLine1 String?
+  shippingAddressLine2 String?
+  shippingCity         String?
+  shippingState        String?
+  shippingPostalCode   String?
+  shippingCountry      String?
+
+  items OrderItem[]
+  notes String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  productName String
+  price       Int
+  quantity    Int
+
+  createdAt DateTime @default(now())
+}
+
+model Cart {
+  id String @id @default(cuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, customerId])
+}
+
+model CartItem {
+  id String @id @default(cuid())
+
+  cartId String
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  quantity      Int
+  priceSnapshot Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+}
+
+model Address {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  fullName String
+  phone    String
+
+  addressLine1 String
+  addressLine2 String?
+
+  city       String
+  state      String
+  postalCode String
+  country    String
+
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StockLog {
+  id String @id @default(cuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  changeQty Int
+  reason    String?
+
+  createdAt DateTime @default(now())
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  name     String // e.g. "Red", "Large", "Red / Large"
+  sku      String?
+  price    Int? // specific price if overridden
+  mrp      Int? // specific mrp if overridden
+  stockQty Int     @default(0)
+  isActive Boolean @default(true)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  stockLogs  StockLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model OtpRequest {
+  id String @id @default(cuid())
+
+  sellerId String? // ✅ ADD THIS
+  seller   Seller? @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  phone   String
+  purpose OtpPurpose
+
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model AuthSession {
+  id String @id @default(cuid())
+
+  role UserRole
+
+  sellerId String?
+  seller   Seller? @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  adminId String?
+  admin   AdminUser? @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailVerification {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  sellerId   String?
+  customerId String?
+
+  title   String
+  message String
+  type    String // ORDER | STOCK | SYSTEM
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# nextjs
+.next/
+out/
+
+# env
+.env
+.env.local
+.env.production
+
+# logs
+*.log
+
+# cache
+.cache/
+
+# uploads
+uploads/
+
+# prisma
+prisma/dev.db
+
+# vscode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# build
+dist/

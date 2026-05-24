@@ -1,0 +1,23 @@
+{
+  "name": "hseran",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "turbo": "^2.8.1"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.20",
+    "@types/pdfkit": "^0.17.5",
+    "axios": "^1.13.4",
+    "pdfkit": "^0.18.0",
+    "zustand": "^5.0.11"
+  }
+}
